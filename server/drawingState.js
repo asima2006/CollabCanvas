@@ -51,21 +51,27 @@ function addStroke(stroke) {
 function undoStroke() {
   if (history.length > 0) {
     const lastStroke = history.pop();
-    redoStack.push(lastStroke);
+    if(lastStroke) {
+        redoStack.push(lastStroke);
+    }
   }
-  return history;
 }
 
 function redoStroke() {
   if (redoStack.length > 0) {
     const lastUndoneStroke = redoStack.pop();
-    history.push(lastUndoneStroke);
+    if (lastUndoneStroke) {
+        history.push(lastUndoneStroke);
+    }
   }
-  return history;
 }
 
 function getHistory() {
   return history;
+}
+
+function getRedoStack() {
+    return redoStack;
 }
 
 module.exports = {
@@ -77,4 +83,5 @@ module.exports = {
   undoStroke,
   redoStroke,
   getHistory,
+  getRedoStack,
 };

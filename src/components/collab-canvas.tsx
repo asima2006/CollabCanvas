@@ -12,7 +12,7 @@ import { Users } from "lucide-react";
 export default function CollabCanvas() {
   const [color, setColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(5);
-  const { socket, history, users, cursors, undo, redo, draw, moveCursor } = useDrawingSocket();
+  const { socket, history, redoStack, users, cursors, undo, redo, draw, moveCursor } = useDrawingSocket();
 
   const selfId = socket?.id;
   const self = users.find(u => u.id === selfId);
@@ -29,7 +29,7 @@ export default function CollabCanvas() {
                 onUndo={undo}
                 onRedo={redo}
                 canUndo={history.length > 0}
-                canRedo={true} // Simplified, server knows actual state
+                canRedo={redoStack.length > 0}
             />
         </div>
       </header>

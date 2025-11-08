@@ -11,6 +11,7 @@ const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001"
 export default function useDrawingSocket() {
   const socketRef = useRef<Socket | null>(null);
   const [history, setHistory] = useState<Stroke[]>([]);
+  const [redoStack, setRedoStack] = useState<Stroke[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [cursors, setCursors] = useState<Cursors>({});
   const { toast } = useToast();
@@ -23,8 +24,9 @@ export default function useDrawingSocket() {
       console.log("Connected to socket server with ID:", socket.id);
     });
 
-    socket.on("canvas-state", (data: { history: Stroke[]; users: User[] }) => {
+    socket.on("canvas-state", (data: { history: Stroke[], redoStack: Stroke[], users: User[] }) => {
       setHistory(data.history);
+      setRedoStack(data.redoStack);
       setUsers(data.users);
       toast({
         title: "Connected!",
@@ -47,10 +49,12 @@ export default function useDrawingSocket() {
 
     socket.on("new-draw", (stroke: Stroke) => {
       setHistory((prevHistory) => [...prevHistory, stroke]);
+      setRedoStack([]);
     });
     
-    socket.on("canvas-update", (data: { history: Stroke[] }) => {
+    socket.on("canvas-update", (data: { history: Stroke[], redoStack: Stroke[] }) => {
       setHistory(data.history);
+      setRedoStack(data.redoStack);
     });
 
     socket.on("cursor-positions", (cursorPositions: Cursors) => {
@@ -74,6 +78,7 @@ export default function useDrawingSocket() {
   const draw = useCallback((stroke: Stroke) => {
     socketRef.current?.emit("draw", stroke);
     setHistory((prevHistory) => [...prevHistory, stroke]);
+    setRedoStack([]);
   }, []);
 
   const moveCursor = useCallback(
@@ -91,5 +96,5 @@ export default function useDrawingSocket() {
     socketRef.current?.emit("redo");
   }, []);
 
-  return { socket: socketRef.current, history, users, cursors, draw, moveCursor, undo, redo };
+  return { socket: socketRef.current, history, redoStack, users, cursors, draw, moveCursor, undo, redo };
 }

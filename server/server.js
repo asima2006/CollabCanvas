@@ -29,6 +29,7 @@ io.on('connection', (socket) => {
   // Send the current state to the new user
   socket.emit('canvas-state', {
     history: drawingState.getHistory(),
+    redoStack: drawingState.getRedoStack(),
     users: drawingState.getAllUsers(),
   });
 
@@ -56,16 +57,22 @@ io.on('connection', (socket) => {
 
   // Handle undo events
   socket.on('undo', () => {
-    const newHistory = drawingState.undoStroke();
+    drawingState.undoStroke();
     // Broadcast the updated history to all clients
-    io.emit('canvas-update', { history: newHistory });
+    io.emit('canvas-update', { 
+        history: drawingState.getHistory(),
+        redoStack: drawingState.getRedoStack(),
+    });
   });
 
   // Handle redo events
   socket.on('redo', () => {
-    const newHistory = drawingState.redoStroke();
+    drawingState.redoStroke();
     // Broadcast the updated history to all clients
-    io.emit('canvas-update', { history: newHistory });
+    io.emit('canvas-update', { 
+        history: drawingState.getHistory(),
+        redoStack: drawingState.getRedoStack(),
+    });
   });
 
   // Handle disconnections
