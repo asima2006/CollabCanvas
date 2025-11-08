@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function CollabCanvas() {
   const [color, setColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(5);
-  const { socket, history, redoStack, users, cursors, undo, redo, draw, moveCursor } = useDrawingSocket();
+  const { socket, history, redoStack, users, cursors, undo, redo, draw, drawing, moveCursor } = useDrawingSocket();
   const { toast } = useToast();
 
   const selfId = socket?.id;
@@ -50,6 +50,7 @@ export default function CollabCanvas() {
           color={color}
           strokeWidth={strokeWidth}
           onDraw={draw}
+          onDrawing={drawing}
           onCursorMove={moveCursor}
           cursors={cursors}
           selfId={selfId}

@@ -38,11 +38,17 @@ io.on('connection', (socket) => {
   socket.broadcast.emit('user-list', drawingState.getAllUsers());
 
 
-  // Handle drawing events
+  // Handle final drawing events
   socket.on('draw', (stroke) => {
     drawingState.addStroke(stroke);
     // Broadcast the new stroke to all other clients
     socket.broadcast.emit('new-draw', stroke);
+  });
+
+  // Handle in-progress drawing events
+  socket.on('drawing', (stroke) => {
+    // Broadcast the new stroke to all other clients
+    socket.broadcast.emit('drawing', stroke);
   });
 
   // Handle cursor movement

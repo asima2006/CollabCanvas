@@ -8,6 +8,7 @@ type DrawingCanvasProps = {
   color: string;
   strokeWidth: number;
   onDraw: (stroke: Stroke) => void;
+  onDrawing: (stroke: Stroke) => void;
   onCursorMove: (pos: { x: number; y: number }) => void;
   cursors: Cursors;
   selfId?: string;
@@ -18,11 +19,13 @@ export default function DrawingCanvas({
   color,
   strokeWidth,
   onDraw,
+  onDrawing,
   onCursorMove,
   cursors,
   selfId,
 }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tempCanvasRef = useRef<HTMLCanvasElement>(null);
   const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const isDrawing = useRef(false);
@@ -34,12 +37,15 @@ export default function DrawingCanvas({
 
   const setCanvasDimensions = () => {
     const canvas = canvasRef.current;
+    const tempCanvas = tempCanvasRef.current;
     const cursorCanvas = cursorCanvasRef.current;
-    if (!canvas || !cursorCanvas || !canvas.parentElement) return;
+    if (!canvas || !tempCanvas || !cursorCanvas || !canvas.parentElement) return;
 
     const { width, height } = canvas.parentElement.getBoundingClientRect();
     canvas.width = width;
     canvas.height = height;
+    tempCanvas.width = width;
+    tempCanvas.height = height;
     cursorCanvas.width = width;
     cursorCanvas.height = height;
   };
@@ -129,15 +135,19 @@ export default function DrawingCanvas({
     currentStroke.current.push(point);
     onCursorMove({ x: point.x, y: point.y });
 
-    const ctx = getCanvasContext(canvasRef);
-    if (!ctx) return;
+    const ctx = getCanvasContext(tempCanvasRef);
+    if (!ctx || !tempCanvasRef.current) return;
     
+    // Clear the temp canvas before drawing the current stroke
+    ctx.clearRect(0, 0, tempCanvasRef.current.width, tempCanvasRef.current.height);
+
     const stroke: Stroke = {
         points: currentStroke.current,
         color,
         strokeWidth,
     };
     drawStroke(ctx, stroke);
+    onDrawing(stroke);
   };
 
   const handleEndDrawing = (e: React.MouseEvent | React.TouchEvent) => {
@@ -145,12 +155,23 @@ export default function DrawingCanvas({
     e.preventDefault();
     isDrawing.current = false;
     
+    const tempCtx = getCanvasContext(tempCanvasRef);
+    if(tempCtx && tempCanvasRef.current) {
+      tempCtx.clearRect(0, 0, tempCanvasRef.current.width, tempCanvasRef.current.height);
+    }
+    
     if (currentStroke.current.length > 1) {
-      onDraw({
+      const stroke = {
         points: currentStroke.current,
         color,
         strokeWidth,
-      });
+      }
+      onDraw(stroke);
+
+      const mainCtx = getCanvasContext(canvasRef);
+      if(mainCtx) {
+        drawStroke(mainCtx, stroke);
+      }
     }
     currentStroke.current = [];
   };
@@ -159,6 +180,10 @@ export default function DrawingCanvas({
     <div className="absolute inset-0 h-full w-full bg-white rounded-lg shadow-inner">
       <canvas
         ref={canvasRef}
+        className="absolute top-0 left-0"
+      />
+       <canvas
+        ref={tempCanvasRef}
         className="absolute top-0 left-0"
         onMouseDown={handleStartDrawing}
         onMouseMove={handleDrawing}
