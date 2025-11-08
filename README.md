@@ -44,19 +44,11 @@ To run CollabCanvas locally, you will need to run two processes in separate term
 
 ### Running in Development
 
-1.  **Start the Backend (Socket.IO Server):**
-    Open a terminal and run:
-    ```bash
-    npm run dev:socket
-    ```
-    This will start the WebSocket server on `http://localhost:3001`.
-
-2.  **Start the Frontend (Next.js App):**
-    Open a second terminal and run:
-    ```bash
-    npm run dev
-    ```
-    This will start the Next.js development server, typically on `http://localhost:9002`.
+Open a terminal and run:
+```bash
+npm run dev
+```
+This single command will start both the Next.js frontend (on `http://localhost:9002`) and the Socket.IO backend (on `http://localhost:3001`).
 
 3.  **Open the App:**
     Navigate to `http://localhost:9002` in your web browser.
@@ -70,8 +62,9 @@ To run CollabCanvas locally, you will need to run two processes in separate term
 
 ## 📦 Available Scripts
 
--   `npm run dev`: Starts the Next.js frontend development server.
--   `npm run dev:socket`: Starts the backend WebSocket server with `nodemon` for auto-reloading.
+-   `npm run dev`: Starts the Next.js frontend and Socket.IO backend concurrently.
+-   `npm run dev:next`: Starts only the Next.js frontend development server.
+-   `npm run dev:socket`: Starts only the backend WebSocket server with `nodemon` for auto-reloading.
 -   `npm run build`: Creates a production build of the Next.js application.
 -   `npm run start`: Starts the production Next.js server (requires `npm run build` first).
 -   `npm run start:socket`: Starts the backend WebSocket server for production.
