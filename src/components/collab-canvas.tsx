@@ -8,14 +8,24 @@ import UserList from "./user-list";
 import { type User } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Users } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function CollabCanvas() {
   const [color, setColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(5);
   const { socket, history, redoStack, users, cursors, undo, redo, draw, moveCursor } = useDrawingSocket();
+  const { toast } = useToast();
 
   const selfId = socket?.id;
   const self = users.find(u => u.id === selfId);
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast({
+      title: "Link Copied!",
+      description: "You can now share the link with others.",
+    });
+  };
 
   return (
     <div className="relative flex h-full w-full flex-col md:flex-row">
@@ -28,6 +38,7 @@ export default function CollabCanvas() {
                 onStrokeWidthChange={setStrokeWidth}
                 onUndo={undo}
                 onRedo={redo}
+                onShare={handleShare}
                 canUndo={history.length > 0}
                 canRedo={redoStack.length > 0}
             />

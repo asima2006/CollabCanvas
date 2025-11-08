@@ -1,6 +1,6 @@
 "use client";
 
-import { Brush, Palette, Redo, Undo } from "lucide-react";
+import { Brush, Palette, Redo, Share2, Undo } from "lucide-react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Slider } from "./ui/slider";
@@ -13,6 +13,7 @@ type ToolbarProps = {
   onStrokeWidthChange: (width: number) => void;
   onUndo: () => void;
   onRedo: () => void;
+  onShare: () => void;
   canUndo: boolean;
   canRedo: boolean;
 };
@@ -29,6 +30,7 @@ export default function Toolbar({
   onStrokeWidthChange,
   onUndo,
   onRedo,
+  onShare,
   canUndo,
   canRedo,
 }: ToolbarProps) {
@@ -107,12 +109,23 @@ export default function Toolbar({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="outline" size="icon" onClick={onRedo}>
+            <Button variant="outline" size="icon" onClick={onRedo} disabled={!canRedo}>
               <Redo className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
             <p>Redo</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="icon" onClick={onShare}>
+              <Share2 className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Copy Invite Link</p>
           </TooltipContent>
         </Tooltip>
       </div>
