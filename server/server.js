@@ -9,6 +9,7 @@ app.use(cors());
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 3001;
+const HOST = '0.0.0.0';
 
 const io = new Server(server, {
   cors: {
@@ -86,6 +87,6 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`CollabCanvas server is running on http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`CollabCanvas server is running on http://${HOST}:${PORT}`);
 });

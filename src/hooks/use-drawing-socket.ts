@@ -6,7 +6,7 @@ import { type User, type Stroke, type Cursors } from "@/lib/types";
 import { useToast } from "./use-toast";
 import throttle from "lodash.throttle";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3001` : "http://localhost:3001");
 
 export default function useDrawingSocket() {
   const socketRef = useRef<Socket | null>(null);
