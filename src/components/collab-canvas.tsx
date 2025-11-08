@@ -6,7 +6,6 @@ import DrawingCanvas from "./drawing-canvas";
 import Toolbar from "./toolbar";
 import UserList from "./user-list";
 import { type User } from "@/lib/types";
-import { Card, CardContent } from "@/components/ui/card";
 import { Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 

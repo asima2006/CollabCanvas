@@ -15,6 +15,11 @@ export default function useDrawingSocket() {
   const [users, setUsers] = useState<User[]>([]);
   const [cursors, setCursors] = useState<Cursors>({});
   const { toast } = useToast();
+  const usersRef = useRef(users);
+
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
 
   useEffect(() => {
     const socket = io(SOCKET_URL);
@@ -35,14 +40,17 @@ export default function useDrawingSocket() {
     });
 
     socket.on("user-list", (userList: User[]) => {
-      const oldUserCount = users.length;
+      const oldUserCount = usersRef.current.length;
       if (userList.length > oldUserCount) {
-        const newUser = userList[userList.length-1];
-        if (newUser.id !== socket.id) {
+        const newUser = userList.find(u => !usersRef.current.some(oldu => oldu.id === u.id));
+        if (newUser && newUser.id !== socket.id) {
             toast({ description: `${newUser.name} joined the session.` });
         }
       } else if (userList.length < oldUserCount) {
-        toast({ description: `A user left the session.` });
+        const leftUser = usersRef.current.find(u => !userList.some(newu => newu.id === u.id));
+        if (leftUser) {
+          toast({ description: `${leftUser.name} left the session.` });
+        }
       }
       setUsers(userList);
     });
@@ -73,7 +81,8 @@ export default function useDrawingSocket() {
     return () => {
       socket.disconnect();
     };
-  }, [toast, users.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]);
 
   const draw = useCallback((stroke: Stroke) => {
     socketRef.current?.emit("draw", stroke);
