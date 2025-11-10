@@ -75,11 +75,30 @@ export default function useDrawingSocket(providedRoomId?: string) {
   }, [users]);
 
   useEffect(() => {
-    const socket = io(SOCKET_URL);
+    console.log("[socket] attempting to connect to:", SOCKET_URL);
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket'],
+      timeout: 20000,
+      reconnectionAttempts: Infinity,
+    });
     socketRef.current = socket;
 
     socket.on("connect", () => {
       console.log("Connected to socket server with ID:", socket.id);
+    });
+
+    socket.on('connect_error', (err) => {
+      console.error('[socket] connect_error', err);
+      toast({ title: 'Socket connection error', description: String(err.message || err), variant: 'destructive' });
+    });
+
+    socket.on('reconnect_attempt', (n) => {
+      console.log('[socket] reconnect attempt', n);
+    });
+
+    socket.on('reconnect_failed', () => {
+      console.error('[socket] reconnect failed');
+      toast({ title: 'Socket reconnect failed', description: 'Unable to reconnect to realtime server.', variant: 'destructive' });
     });
 
   // Determine room id to join: prefer providedRoomId (from UI), otherwise URL `room` param or 'default'
