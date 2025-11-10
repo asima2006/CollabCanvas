@@ -8,8 +8,23 @@ import throttle from "lodash.throttle";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3001` : "http://localhost:3001");
 
-function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
-    ctx.strokeStyle = stroke.color;
+function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, isPreview = false) {
+    const prevComposite = ctx.globalCompositeOperation;
+    if (stroke.tool === 'eraser') {
+      // For previews (on temporary canvas) draw a visible gray stroke using source-over so
+      // other clients can see where erasing will occur. For final strokes on the main canvas
+      // use destination-out to actually erase content.
+      if (isPreview) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      } else {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
+      }
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = stroke.color;
+    }
     ctx.lineWidth = stroke.strokeWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -21,9 +36,10 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
       });
       ctx.stroke();
     }
+    ctx.globalCompositeOperation = prevComposite;
 }
 
-export default function useDrawingSocket() {
+export default function useDrawingSocket(providedRoomId?: string) {
   const socketRef = useRef<Socket | null>(null);
   const [history, setHistory] = useState<Stroke[]>([]);
   const [redoStack, setRedoStack] = useState<Stroke[]>([]);
@@ -66,6 +82,12 @@ export default function useDrawingSocket() {
       console.log("Connected to socket server with ID:", socket.id);
     });
 
+  // Determine room id to join: prefer providedRoomId (from UI), otherwise URL `room` param or 'default'
+  const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+  const urlRoom = url?.searchParams.get('room');
+  const roomId = providedRoomId || urlRoom || 'default';
+  socket.emit('join-room', roomId);
+
     socket.on("canvas-state", (data: { history: Stroke[], redoStack: Stroke[], users: User[] }) => {
       setHistory(data.history);
       setRedoStack(data.redoStack);
@@ -102,15 +124,16 @@ export default function useDrawingSocket() {
       }
     });
 
-    socket.on("drawing", (stroke: Stroke) => {
-        const ctx = tempCanvasContextRef.current;
-        const canvas = tempCanvasRef.current;
-        if(ctx && canvas) {
-            // Clear the canvas before drawing the new stroke
-            ctx.clearRect(0,0, canvas.width, canvas.height);
-            drawStroke(ctx, stroke);
-        }
-    });
+  socket.on("drawing", (stroke: Stroke) => {
+    const ctx = tempCanvasContextRef.current;
+    const canvas = tempCanvasRef.current;
+    if(ctx && canvas) {
+      // Clear the canvas before drawing the new stroke
+      ctx.clearRect(0,0, canvas.width, canvas.height);
+      // mark as preview so eraser strokes render visibly on the temp canvas
+      drawStroke(ctx, stroke, true);
+    }
+  });
     
     socket.on("canvas-update", (data: { history: Stroke[], redoStack: Stroke[] }) => {
       setHistory(data.history);
@@ -136,12 +159,37 @@ export default function useDrawingSocket() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast]);
 
+  // throttled drawing emitter (25ms)
+  const drawingThrottled = useRef(throttle((s: any) => {
+    socketRef.current?.emit('drawing', s);
+  }, 25)).current;
+
   const draw = useCallback((stroke: Stroke) => {
-    socketRef.current?.emit("draw", stroke);
+    // Attach id/owner/ts to final stroke before sending so server and peers have canonical metadata
+    const enriched = {
+      ...stroke,
+      id: `${socketRef.current?.id || 'anon'}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+      ownerId: socketRef.current?.id,
+      ts: Date.now(),
+    } as Stroke & { id: string; ownerId?: string; ts: number };
+    socketRef.current?.emit("draw", enriched);
   }, []);
 
   const drawing = useCallback((stroke: Stroke) => {
-    socketRef.current?.emit("drawing", stroke);
+    // Use a throttled sender for high-frequency in-progress drawing events.
+    // We attach a temporary id and owner so peers can render previews.
+    const enriched = {
+      ...stroke,
+      id: `${socketRef.current?.id || 'anon'}-tmp-${Math.random().toString(36).slice(2,6)}`,
+      ownerId: socketRef.current?.id,
+      ts: Date.now(),
+    } as Stroke & { id: string; ownerId?: string; ts: number };
+    // Send eraser drawing immediately for low-latency erasing; throttle brush previews
+    if (enriched.tool === 'eraser') {
+      socketRef.current?.emit('drawing', enriched);
+    } else {
+      drawingThrottled(enriched);
+    }
   }, []);
 
   const moveCursor = useCallback(

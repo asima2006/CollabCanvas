@@ -7,6 +7,7 @@ export type Stroke = {
   points: Point[];
   color: string;
   strokeWidth: number;
+  tool?: 'brush' | 'eraser';
 };
 
 export type User = {

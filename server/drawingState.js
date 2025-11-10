@@ -1,77 +1,99 @@
 // In-memory store for the drawing state.
 // This is not persistent. The state is lost on server restart.
 
-let history = [];
-let redoStack = [];
-const users = new Map();
+// Room-based in-memory store for the drawing state.
+// Each room has its own history, redo stack and user map.
+// This is not persistent. The state is lost on server restart.
+
+const rooms = new Map();
 
 const COLORS = [
   '#F44336', '#E91E63', '#9C27B0', '#673AB7', '#3F51B5',
   '#2196F3', '#03A9F4', '#00BCD4', '#009688', '#4CAF50',
   '#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#FF5722'
 ];
+function createRoomIfMissing(roomId = 'default') {
+  if (!rooms.has(roomId)) {
+    rooms.set(roomId, {
+      history: [],
+      redoStack: [],
+      users: new Map(),
+      userColorIndex: 0,
+      userNameCounter: 1,
+    });
+  }
+  return rooms.get(roomId);
+}
 
-let userColorIndex = 0;
-let userNameCounter = 1;
-
-function getNextColor() {
-  const color = COLORS[userColorIndex];
-  userColorIndex = (userColorIndex + 1) % COLORS.length;
+function getNextColor(roomId) {
+  const room = createRoomIfMissing(roomId);
+  const idx = room.userColorIndex;
+  const color = COLORS[idx % COLORS.length];
+  room.userColorIndex = (idx + 1) % COLORS.length;
   return color;
 }
 
-function addUser(id) {
+function addUser(id, roomId = 'default') {
+  const room = createRoomIfMissing(roomId);
   const user = {
     id,
-    name: `User-${userNameCounter++}`,
-    color: getNextColor(),
+    name: `User-${room.userNameCounter++}`,
+    color: getNextColor(roomId),
   };
-  users.set(id, user);
+  room.users.set(id, user);
   return user;
 }
 
-function removeUser(id) {
-  users.delete(id);
+function removeUser(id, roomId = 'default') {
+  const room = createRoomIfMissing(roomId);
+  room.users.delete(id);
 }
 
-function getUser(id) {
-  return users.get(id);
+function getUser(id, roomId = 'default') {
+  const room = createRoomIfMissing(roomId);
+  return room.users.get(id);
 }
 
-function getAllUsers() {
-  return Array.from(users.values());
+function getAllUsers(roomId = 'default') {
+  const room = createRoomIfMissing(roomId);
+  return Array.from(room.users.values());
 }
 
-function addStroke(stroke) {
-  history.push(stroke);
+function addStroke(stroke, roomId = 'default') {
+  const room = createRoomIfMissing(roomId);
+  room.history.push(stroke);
   // A new stroke clears the redo stack
-  redoStack = [];
+  room.redoStack = [];
 }
 
-function undoStroke() {
-  if (history.length > 0) {
-    const lastStroke = history.pop();
-    if(lastStroke) {
-        redoStack.push(lastStroke);
+function undoStroke(roomId = 'default') {
+  const room = createRoomIfMissing(roomId);
+  if (room.history.length > 0) {
+    const lastStroke = room.history.pop();
+    if (lastStroke) {
+      room.redoStack.push(lastStroke);
     }
   }
 }
 
-function redoStroke() {
-  if (redoStack.length > 0) {
-    const lastUndoneStroke = redoStack.pop();
+function redoStroke(roomId = 'default') {
+  const room = createRoomIfMissing(roomId);
+  if (room.redoStack.length > 0) {
+    const lastUndoneStroke = room.redoStack.pop();
     if (lastUndoneStroke) {
-        history.push(lastUndoneStroke);
+      room.history.push(lastUndoneStroke);
     }
   }
 }
 
-function getHistory() {
-  return history;
+function getHistory(roomId = 'default') {
+  const room = createRoomIfMissing(roomId);
+  return room.history;
 }
 
-function getRedoStack() {
-    return redoStack;
+function getRedoStack(roomId = 'default') {
+  const room = createRoomIfMissing(roomId);
+  return room.redoStack;
 }
 
 module.exports = {

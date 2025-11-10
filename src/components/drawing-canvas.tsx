@@ -7,6 +7,7 @@ type DrawingCanvasProps = {
   history: Stroke[];
   color: string;
   strokeWidth: number;
+  tool?: 'brush' | 'eraser';
   onDraw: (stroke: Stroke) => void;
   onDrawing: (stroke: Stroke) => void;
   onCursorMove: (pos: { x: number; y: number }) => void;
@@ -18,6 +19,7 @@ export default function DrawingCanvas({
   history,
   color,
   strokeWidth,
+  tool,
   onDraw,
   onDrawing,
   onCursorMove,
@@ -51,7 +53,23 @@ export default function DrawingCanvas({
   };
   
   const drawStroke = (ctx: CanvasRenderingContext2D, stroke: Stroke) => {
-    ctx.strokeStyle = stroke.color;
+    const prevComposite = ctx.globalCompositeOperation;
+    if (stroke.tool === 'eraser') {
+      // If we're drawing on the temporary canvas (preview), render a visible gray
+      // preview using source-over so other clients see where erasing will happen.
+      // For the main canvas (final rendering) use destination-out to actually erase.
+      if (ctx.canvas === tempCanvasRef.current) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      } else {
+        ctx.globalCompositeOperation = 'destination-out';
+        // When erasing, color is irrelevant; set strokeStyle to opaque fallback
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
+      }
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = stroke.color;
+    }
     ctx.lineWidth = stroke.strokeWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -63,6 +81,8 @@ export default function DrawingCanvas({
       });
       ctx.stroke();
     }
+    // restore composite mode
+    ctx.globalCompositeOperation = prevComposite;
   };
 
   const redrawCanvas = () => {
@@ -144,7 +164,8 @@ export default function DrawingCanvas({
     const stroke: Stroke = {
         points: currentStroke.current,
         color,
-        strokeWidth,
+    strokeWidth,
+    tool,
     };
     drawStroke(ctx, stroke);
     onDrawing(stroke);
@@ -165,6 +186,7 @@ export default function DrawingCanvas({
         points: currentStroke.current,
         color,
         strokeWidth,
+        tool,
       }
       onDraw(stroke);
 

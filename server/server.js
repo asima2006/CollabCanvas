@@ -18,78 +18,136 @@ const io = new Server(server, {
   },
 });
 
+// Simple HTTP route to inspect room state for debugging
+app.get('/room/:id', (req, res) => {
+  const roomId = req.params.id || 'default';
+  try {
+    const history = drawingState.getHistory(roomId);
+    const redo = drawingState.getRedoStack(roomId);
+    const users = drawingState.getAllUsers(roomId);
+    res.json({ roomId, historyLength: history.length, redoLength: redo.length, users });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Map of roomId -> Map(socketId -> cursor)
 const cursorPositions = new Map();
 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // Add user to state and get their details
-  const user = drawingState.addUser(socket.id);
-  cursorPositions.set(socket.id, { x: -1, y: -1, name: user.name, color: user.color });
+  // Default room until client joins
+  socket.data.room = 'default';
 
-  // Send the current state to the new user
-  socket.emit('canvas-state', {
-    history: drawingState.getHistory(),
-    redoStack: drawingState.getRedoStack(),
-    users: drawingState.getAllUsers(),
+  // Listen for room join from client
+  socket.on('join-room', (roomId = 'default') => {
+    console.log(`Socket ${socket.id} requested join-room: ${roomId}`);
+    // Leave previous room (if any)
+    const prevRoom = socket.data.room;
+    if (prevRoom && prevRoom !== roomId) {
+      socket.leave(prevRoom);
+    }
+
+    socket.join(roomId);
+    socket.data.room = roomId;
+
+    // Add user to state for this room and set cursor default
+    const user = drawingState.addUser(socket.id, roomId);
+    if (!cursorPositions.has(roomId)) cursorPositions.set(roomId, new Map());
+    cursorPositions.get(roomId).set(socket.id, { x: -1, y: -1, name: user.name, color: user.color });
+
+    // Send the current state for the room to the new user
+    socket.emit('canvas-state', {
+      history: drawingState.getHistory(roomId),
+      redoStack: drawingState.getRedoStack(roomId),
+      users: drawingState.getAllUsers(roomId),
+    });
+
+    // Inform other users in the room
+    socket.to(roomId).emit('user-list', drawingState.getAllUsers(roomId));
   });
-
-  // Inform all other users that a new user has joined
-  socket.broadcast.emit('user-list', drawingState.getAllUsers());
-
 
   // Handle final drawing events
   socket.on('draw', (stroke) => {
-    drawingState.addStroke(stroke);
-    // Broadcast the new stroke to all other clients
-    socket.broadcast.emit('new-draw', stroke);
+    console.log(`Received draw from ${socket.id} in room ${socket.data.room}: points=${(stroke.points||[]).length} tool=${stroke.tool}`);
+    const roomId = socket.data.room || 'default';
+    // Ensure stroke has metadata: id, ownerId, ts
+    const enriched = Object.assign({}, stroke);
+    if (!enriched.id) enriched.id = `${socket.id}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    enriched.ownerId = enriched.ownerId || socket.id;
+    enriched.ts = enriched.ts || Date.now();
+
+    drawingState.addStroke(enriched, roomId);
+    // Broadcast the new stroke to all clients in the same room (including sender)
+    io.to(roomId).emit('new-draw', enriched);
   });
 
   // Handle in-progress drawing events
   socket.on('drawing', (stroke) => {
-    // Broadcast the new stroke to all other clients
-    socket.broadcast.emit('drawing', stroke);
+    // small debug log to confirm receipt of high-frequency events (throttled in logs)
+    if(Math.random() < 0.02) console.log(`Received drawing preview from ${socket.id} in room ${socket.data.room} (points=${(stroke.points||[]).length} tool=${stroke.tool})`);
+    const roomId = socket.data.room || 'default';
+    // Attach ownerId so other clients can show cursor/preview correctly
+    const enriched = Object.assign({}, stroke);
+    enriched.ownerId = enriched.ownerId || socket.id;
+    if (!enriched.id) enriched.id = `${socket.id}-tmp-${Math.random().toString(36).slice(2,6)}`;
+    socket.to(roomId).emit('drawing', enriched);
   });
 
   // Handle cursor movement
   socket.on('cursor-move', (pos) => {
-    const userCursor = cursorPositions.get(socket.id);
-    if(userCursor) {
-      userCursor.x = pos.x;
-      userCursor.y = pos.y;
-      // Broadcast all cursor positions (throttled on client)
-      io.emit('cursor-positions', Object.fromEntries(cursorPositions));
+    // debug cursor
+    // console.log(`cursor-move from ${socket.id} in room ${socket.data.room}: x=${pos.x}, y=${pos.y}`);
+    const roomId = socket.data.room || 'default';
+    const roomCursors = cursorPositions.get(roomId);
+    if (roomCursors) {
+      const userCursor = roomCursors.get(socket.id);
+      if (userCursor) {
+        userCursor.x = pos.x;
+        userCursor.y = pos.y;
+        // Broadcast all cursor positions for the room (throttled on client)
+        io.to(roomId).emit('cursor-positions', Object.fromEntries(roomCursors));
+      }
     }
   });
 
   // Handle undo events
   socket.on('undo', () => {
-    drawingState.undoStroke();
-    // Broadcast the updated history to all clients
-    io.emit('canvas-update', { 
-        history: drawingState.getHistory(),
-        redoStack: drawingState.getRedoStack(),
+    console.log(`Undo requested by ${socket.id} in room ${socket.data.room}`);
+    const roomId = socket.data.room || 'default';
+    drawingState.undoStroke(roomId);
+    // Broadcast the updated history to all clients in the room
+    io.to(roomId).emit('canvas-update', { 
+        history: drawingState.getHistory(roomId),
+        redoStack: drawingState.getRedoStack(roomId),
     });
   });
 
   // Handle redo events
   socket.on('redo', () => {
-    drawingState.redoStroke();
-    // Broadcast the updated history to all clients
-    io.emit('canvas-update', { 
-        history: drawingState.getHistory(),
-        redoStack: drawingState.getRedoStack(),
+    console.log(`Redo requested by ${socket.id} in room ${socket.data.room}`);
+    const roomId = socket.data.room || 'default';
+    drawingState.redoStroke(roomId);
+    // Broadcast the updated history to all clients in the room
+    io.to(roomId).emit('canvas-update', { 
+        history: drawingState.getHistory(roomId),
+        redoStack: drawingState.getRedoStack(roomId),
     });
   });
 
   // Handle disconnections
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
-    drawingState.removeUser(socket.id);
-    cursorPositions.delete(socket.id);
-    // Inform all clients that a user has left
-    io.emit('user-list', drawingState.getAllUsers());
-    io.emit('cursor-positions', Object.fromEntries(cursorPositions));
+    const roomId = socket.data.room || 'default';
+    drawingState.removeUser(socket.id, roomId);
+    const roomCursors = cursorPositions.get(roomId);
+    if (roomCursors) {
+      roomCursors.delete(socket.id);
+    }
+    // Inform clients in the room that a user has left
+    io.to(roomId).emit('user-list', drawingState.getAllUsers(roomId));
+    io.to(roomId).emit('cursor-positions', roomCursors ? Object.fromEntries(roomCursors) : {});
   });
 });
 

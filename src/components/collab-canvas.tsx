@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useDrawingSocket from "@/hooks/use-drawing-socket";
 import DrawingCanvas from "./drawing-canvas";
 import Toolbar from "./toolbar";
@@ -12,19 +12,49 @@ import { useToast } from "@/hooks/use-toast";
 export default function CollabCanvas() {
   const [color, setColor] = useState("#000000");
   const [strokeWidth, setStrokeWidth] = useState(5);
-  const { socket, history, redoStack, users, cursors, undo, redo, draw, drawing, moveCursor } = useDrawingSocket();
+  const [roomId, setRoomId] = useState<string | null>(() => {
+    try {
+      const url = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+      const existing = url?.searchParams.get('room');
+      if (existing) return existing;
+    } catch (e) {
+      // ignore
+    }
+    return `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  });
+
+  const { socket, history, redoStack, users, cursors, undo, redo, draw, drawing, moveCursor } = useDrawingSocket(roomId || undefined);
+  const [tool, setTool] = useState<'brush' | 'eraser'>('brush');
   const { toast } = useToast();
 
   const selfId = socket?.id;
   const self = users.find(u => u.id === selfId);
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
+    const url = new URL(window.location.href);
+    // If we have a roomId in state use it, otherwise ensure one exists on the URL
+    if (roomId) {
+      const existing = url.searchParams.get('room');
+      url.searchParams.set('room', roomId);
+      // Update the browser URL so users can copy it directly from the address bar
+      if (existing !== roomId) {
+        window.history.replaceState({}, '', url.toString());
+      }
+    } else if (!url.searchParams.get('room')) {
+      const gen = `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+      url.searchParams.set('room', gen);
+      setRoomId(gen);
+      // update URL in browser without reloading
+      window.history.replaceState({}, '', url.toString());
+    }
+    navigator.clipboard.writeText(url.toString());
     toast({
       title: "Link Copied!",
       description: "You can now share the link with others.",
     });
   };
+
+  
 
   return (
     <div className="relative flex h-full w-full flex-col md:flex-row">
@@ -33,6 +63,8 @@ export default function CollabCanvas() {
             <Toolbar
                 color={color}
                 strokeWidth={strokeWidth}
+        tool={tool}
+        onToolChange={(t) => setTool(t)}
                 onColorChange={setColor}
                 onStrokeWidthChange={setStrokeWidth}
                 onUndo={undo}
@@ -49,6 +81,7 @@ export default function CollabCanvas() {
           history={history}
           color={color}
           strokeWidth={strokeWidth}
+          tool={tool}
           onDraw={draw}
           onDrawing={drawing}
           onCursorMove={moveCursor}
